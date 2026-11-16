@@ -1,0 +1,214 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated factory user profile and RBAC role assignment.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "maxLength": 256 },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "employeeId": { "type": "string", "maxLength": 40 },
+        "departmentId": { "type": "string", "maxLength": 64 },
+        "section": { "type": "string", "maxLength": 80 },
+        "jobTitle": { "type": "string", "maxLength": 80 },
+        "role": { "type": "string", "enum": ["admin", "analyst", "respondent"] },
+        "preferredLang": { "type": "string", "enum": ["vi", "en", "ko", "zh"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role", "preferredLang", "createdAt", "updatedAt"]
+    },
+    "Department": {
+      "title": "Department",
+      "description": "Factory organizational department and target respondent headcount.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "code": { "type": "string", "maxLength": 32 },
+        "nameVi": { "type": "string", "maxLength": 120 },
+        "nameEn": { "type": "string", "maxLength": 120 },
+        "nameKo": { "type": "string", "maxLength": 120 },
+        "nameZh": { "type": "string", "maxLength": 120 },
+        "sections": { "type": "array" },
+        "targetHeadcount": { "type": "number" },
+        "active": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "code", "nameVi", "nameEn", "targetHeadcount", "active", "updatedAt"]
+    },
+    "CatalogForm": {
+      "title": "CatalogForm",
+      "description": "MES Form catalog entry across 6 operational modules.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "groupId": { "type": "string", "enum": ["production", "material", "equipment", "quality", "traceability", "system"] },
+        "code": { "type": "string", "maxLength": 48 },
+        "nameEn": { "type": "string", "maxLength": 120 },
+        "nameVi": { "type": "string", "maxLength": 120 },
+        "nameKo": { "type": "string", "maxLength": 120 },
+        "nameZh": { "type": "string", "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 400 },
+        "isCustom": { "type": "boolean" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "groupId", "code", "nameEn", "nameVi", "isCustom", "active"]
+    },
+    "CatalogReport": {
+      "title": "CatalogReport",
+      "description": "MES / Web Report catalog entry across 5 reporting domains.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "categoryId": { "type": "string", "enum": ["production_reports", "quality_reports", "equipment_reports", "material_reports", "management_reports"] },
+        "code": { "type": "string", "maxLength": 48 },
+        "nameEn": { "type": "string", "maxLength": 120 },
+        "nameVi": { "type": "string", "maxLength": 120 },
+        "nameKo": { "type": "string", "maxLength": 120 },
+        "nameZh": { "type": "string", "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 400 },
+        "isCustom": { "type": "boolean" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "categoryId", "code", "nameEn", "nameVi", "isCustom", "active"]
+    },
+    "Campaign": {
+      "title": "Campaign",
+      "description": "Survey campaign configuration and lifecycle state.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "maxLength": 180 },
+        "description": { "type": "string", "maxLength": 600 },
+        "status": { "type": "string", "enum": ["draft", "active", "closed", "archived"] },
+        "allowAnonymous": { "type": "boolean" },
+        "requireAuth": { "type": "boolean" },
+        "startDate": { "type": "string", "maxLength": 32 },
+        "endDate": { "type": "string", "maxLength": 32 },
+        "targetParticipants": { "type": "number" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "status", "allowAnonymous", "requireAuth", "targetParticipants", "createdBy", "createdAt", "updatedAt"]
+    },
+    "SurveyQuestion": {
+      "title": "SurveyQuestion",
+      "description": "Configurable custom survey question with conditional visibility.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "section": { "type": "string", "enum": ["A", "B", "C", "D", "E", "F", "G"] },
+        "labelVi": { "type": "string", "maxLength": 240 },
+        "labelEn": { "type": "string", "maxLength": 240 },
+        "labelKo": { "type": "string", "maxLength": 240 },
+        "labelZh": { "type": "string", "maxLength": 240 },
+        "type": { "type": "string", "enum": ["text", "textarea", "select", "multiselect", "rating", "boolean", "number"] },
+        "required": { "type": "boolean" },
+        "orderIndex": { "type": "number" },
+        "conditionField": { "type": "string", "maxLength": 64 },
+        "conditionValue": { "type": "string", "maxLength": 120 },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "section", "labelVi", "labelEn", "type", "required", "orderIndex", "active"]
+    },
+    "SurveyResponse": {
+      "title": "SurveyResponse",
+      "description": "Complete multi-part MES & Report survey submission.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "campaignId": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "respondentUid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "isAnonymous": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["draft", "submitted"] },
+        "departmentId": { "type": "string", "maxLength": 64 },
+        "section": { "type": "string", "maxLength": 80 },
+        "participantInfo": { "type": "object" },
+        "selectedForms": { "type": "array" },
+        "selectedReports": { "type": "array" },
+        "workflowEvaluations": { "type": "array" },
+        "dxNeeds": { "type": "array" },
+        "uxRatings": { "type": "object" },
+        "proposals": { "type": "object" },
+        "submittedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "campaignId", "respondentUid", "isAnonymous", "status", "departmentId", "participantInfo", "selectedForms", "selectedReports", "workflowEvaluations", "dxNeeds", "uxRatings", "proposals", "updatedAt"]
+    },
+    "SystemConfig": {
+      "title": "SystemConfig",
+      "description": "Global survey portal configuration.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "anonymousSurveyDefault": { "type": "boolean" },
+        "requireGoogleLogin": { "type": "boolean" },
+        "defaultLanguage": { "type": "string", "enum": ["vi", "en", "ko", "zh"] },
+        "minSampleThreshold": { "type": "number" },
+        "updatedBy": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "anonymousSurveyDefault", "requireGoogleLogin", "defaultLanguage", "minSampleThreshold", "updatedBy", "updatedAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable administrative action audit trail.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorEmail": { "type": "string", "maxLength": 256 },
+        "action": { "type": "string", "maxLength": 80 },
+        "targetType": { "type": "string", "maxLength": 64 },
+        "targetId": { "type": "string", "maxLength": 64 },
+        "details": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "actorUid", "actorEmail", "action", "targetType", "targetId", "details", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profiles containing PII and role assignments."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Admin membership registry for zero-trust RBAC verification."
+    },
+    "/departments/{deptId}": {
+      "schema": { "$ref": "#/entities/Department" },
+      "description": "Factory departments and sections."
+    },
+    "/catalogForms/{formId}": {
+      "schema": { "$ref": "#/entities/CatalogForm" },
+      "description": "MES Form catalog items."
+    },
+    "/catalogReports/{reportId}": {
+      "schema": { "$ref": "#/entities/CatalogReport" },
+      "description": "MES / Web Report catalog items."
+    },
+    "/campaigns/{campaignId}": {
+      "schema": { "$ref": "#/entities/Campaign" },
+      "description": "Survey campaigns."
+    },
+    "/campaigns/{campaignId}/questions/{questionId}": {
+      "schema": { "$ref": "#/entities/SurveyQuestion" },
+      "description": "Dynamic survey questions per campaign."
+    },
+    "/responses/{responseId}": {
+      "schema": { "$ref": "#/entities/SurveyResponse" },
+      "description": "Individual multi-part survey responses."
+    },
+    "/systemConfig/{configId}": {
+      "schema": { "$ref": "#/entities/SystemConfig" },
+      "description": "Portal system configuration."
+    },
+    "/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Immutable admin audit log entries."
+    }
+  }
+}

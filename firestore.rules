@@ -1,0 +1,355 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Default-deny all paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Hardened Primitive Helpers ---
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() && request.auth.token.email == 'ruanyoujin84@gmail.com';
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        isBootstrappedAdmin() ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isAnalyst() {
+      return isSignedIn() && (
+        isAdmin() ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'analyst')
+      );
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isStr(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    // --- Validation Blueprints ---
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'email', 'role', 'preferredLang', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'employeeId', 'departmentId',
+          'section', 'jobTitle', 'role', 'preferredLang', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.uid) &&
+        isStr(data.email, 3, 256) &&
+        (!('displayName' in data) || isStr(data.displayName, 0, 120)) &&
+        (!('employeeId' in data) || isStr(data.employeeId, 0, 40)) &&
+        (!('departmentId' in data) || isStr(data.departmentId, 0, 64)) &&
+        (!('section' in data) || isStr(data.section, 0, 80)) &&
+        (!('jobTitle' in data) || isStr(data.jobTitle, 0, 80)) &&
+        data.role in ['admin', 'analyst', 'respondent'] &&
+        data.preferredLang in ['vi', 'en', 'ko', 'zh'] &&
+        isStr(data.createdAt, 10, 40) &&
+        isStr(data.updatedAt, 10, 40);
+    }
+
+    function isValidAdminRecord(data) {
+      return data.keys().hasAll(['uid', 'email', 'grantedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'grantedBy', 'grantedAt']) &&
+        isValidId(data.uid) &&
+        isStr(data.email, 3, 256) &&
+        (!('grantedBy' in data) || isStr(data.grantedBy, 0, 128)) &&
+        isStr(data.grantedAt, 10, 40);
+    }
+
+    function isValidDepartment(data) {
+      return data.keys().hasAll(['id', 'code', 'nameVi', 'nameEn', 'targetHeadcount', 'active', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'code', 'nameVi', 'nameEn', 'nameKo', 'nameZh', 'sections', 'targetHeadcount', 'active', 'updatedAt']) &&
+        isValidId(data.id) &&
+        isStr(data.code, 1, 32) &&
+        isStr(data.nameVi, 1, 120) &&
+        isStr(data.nameEn, 1, 120) &&
+        (!('nameKo' in data) || isStr(data.nameKo, 0, 120)) &&
+        (!('nameZh' in data) || isStr(data.nameZh, 0, 120)) &&
+        (!('sections' in data) || (data.sections is list && data.sections.size() <= 30 && (data.sections.size() == 0 || data.sections[0] is string))) &&
+        data.targetHeadcount is number && data.targetHeadcount >= 0 && data.targetHeadcount <= 100000 &&
+        data.active is bool &&
+        isStr(data.updatedAt, 10, 40);
+    }
+
+    function isValidCatalogForm(data) {
+      return data.keys().hasAll(['id', 'groupId', 'code', 'nameEn', 'nameVi', 'isCustom', 'active']) &&
+        data.keys().hasOnly(['id', 'groupId', 'code', 'nameEn', 'nameVi', 'nameKo', 'nameZh', 'description', 'isCustom', 'active']) &&
+        isValidId(data.id) &&
+        data.groupId in ['production', 'material', 'equipment', 'quality', 'traceability', 'system'] &&
+        isStr(data.code, 1, 48) &&
+        isStr(data.nameEn, 1, 120) &&
+        isStr(data.nameVi, 1, 120) &&
+        (!('nameKo' in data) || isStr(data.nameKo, 0, 120)) &&
+        (!('nameZh' in data) || isStr(data.nameZh, 0, 120)) &&
+        (!('description' in data) || isStr(data.description, 0, 400)) &&
+        data.isCustom is bool &&
+        data.active is bool;
+    }
+
+    function isValidCatalogReport(data) {
+      return data.keys().hasAll(['id', 'categoryId', 'code', 'nameEn', 'nameVi', 'isCustom', 'active']) &&
+        data.keys().hasOnly(['id', 'categoryId', 'code', 'nameEn', 'nameVi', 'nameKo', 'nameZh', 'description', 'isCustom', 'active']) &&
+        isValidId(data.id) &&
+        data.categoryId in ['production_reports', 'quality_reports', 'equipment_reports', 'material_reports', 'management_reports'] &&
+        isStr(data.code, 1, 48) &&
+        isStr(data.nameEn, 1, 120) &&
+        isStr(data.nameVi, 1, 120) &&
+        (!('nameKo' in data) || isStr(data.nameKo, 0, 120)) &&
+        (!('nameZh' in data) || isStr(data.nameZh, 0, 120)) &&
+        (!('description' in data) || isStr(data.description, 0, 400)) &&
+        data.isCustom is bool &&
+        data.active is bool;
+    }
+
+    function isValidCampaign(data) {
+      return data.keys().hasAll(['id', 'title', 'status', 'allowAnonymous', 'requireAuth', 'targetParticipants', 'createdBy', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'title', 'description', 'status', 'allowAnonymous', 'requireAuth', 'startDate', 'endDate', 'targetParticipants', 'createdBy', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        isStr(data.title, 1, 180) &&
+        (!('description' in data) || isStr(data.description, 0, 600)) &&
+        data.status in ['draft', 'active', 'closed', 'archived'] &&
+        data.allowAnonymous is bool &&
+        data.requireAuth is bool &&
+        (!('startDate' in data) || isStr(data.startDate, 0, 32)) &&
+        (!('endDate' in data) || isStr(data.endDate, 0, 32)) &&
+        data.targetParticipants is number && data.targetParticipants >= 1 && data.targetParticipants <= 100000 &&
+        isStr(data.createdBy, 1, 128) &&
+        isStr(data.createdAt, 10, 40) &&
+        isStr(data.updatedAt, 10, 40);
+    }
+
+    function isValidSurveyQuestion(data) {
+      return data.keys().hasAll(['id', 'section', 'labelVi', 'labelEn', 'type', 'required', 'orderIndex', 'active']) &&
+        data.keys().hasOnly(['id', 'section', 'labelVi', 'labelEn', 'labelKo', 'labelZh', 'type', 'required', 'orderIndex', 'conditionField', 'conditionValue', 'active']) &&
+        isValidId(data.id) &&
+        data.section in ['A', 'B', 'C', 'D', 'E', 'F', 'G'] &&
+        isStr(data.labelVi, 1, 240) &&
+        isStr(data.labelEn, 1, 240) &&
+        (!('labelKo' in data) || isStr(data.labelKo, 0, 240)) &&
+        (!('labelZh' in data) || isStr(data.labelZh, 0, 240)) &&
+        data.type in ['text', 'textarea', 'select', 'multiselect', 'rating', 'boolean', 'number'] &&
+        data.required is bool &&
+        data.orderIndex is number && data.orderIndex >= 0 && data.orderIndex <= 500 &&
+        (!('conditionField' in data) || isStr(data.conditionField, 0, 64)) &&
+        (!('conditionValue' in data) || isStr(data.conditionValue, 0, 120)) &&
+        data.active is bool;
+    }
+
+    function isValidSurveyResponse(data) {
+      return data.keys().hasAll([
+          'id', 'campaignId', 'respondentUid', 'isAnonymous', 'status',
+          'departmentId', 'participantInfo', 'selectedForms', 'selectedReports',
+          'workflowEvaluations', 'dxNeeds', 'uxRatings', 'proposals', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'campaignId', 'respondentUid', 'isAnonymous', 'status',
+          'departmentId', 'section', 'participantInfo', 'selectedForms', 'selectedReports',
+          'workflowEvaluations', 'dxNeeds', 'uxRatings', 'proposals', 'submittedAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        isValidId(data.campaignId) &&
+        isValidId(data.respondentUid) &&
+        data.isAnonymous is bool &&
+        data.status in ['draft', 'submitted'] &&
+        isStr(data.departmentId, 1, 64) &&
+        (!('section' in data) || isStr(data.section, 0, 80)) &&
+        data.participantInfo is map &&
+        data.selectedForms is list && data.selectedForms.size() <= 80 &&
+        (data.selectedForms.size() == 0 || data.selectedForms[0] is map) &&
+        data.selectedReports is list && data.selectedReports.size() <= 80 &&
+        (data.selectedReports.size() == 0 || data.selectedReports[0] is map) &&
+        data.workflowEvaluations is list && data.workflowEvaluations.size() <= 30 &&
+        (data.workflowEvaluations.size() == 0 || data.workflowEvaluations[0] is map) &&
+        data.dxNeeds is list && data.dxNeeds.size() <= 40 &&
+        (data.dxNeeds.size() == 0 || data.dxNeeds[0] is map) &&
+        data.uxRatings is map &&
+        data.proposals is map &&
+        (!('submittedAt' in data) || isStr(data.submittedAt, 0, 40)) &&
+        isStr(data.updatedAt, 10, 40);
+    }
+
+    function isValidSystemConfig(data) {
+      return data.keys().hasAll(['id', 'anonymousSurveyDefault', 'requireGoogleLogin', 'defaultLanguage', 'minSampleThreshold', 'updatedBy', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'anonymousSurveyDefault', 'requireGoogleLogin', 'defaultLanguage', 'minSampleThreshold', 'updatedBy', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.anonymousSurveyDefault is bool &&
+        data.requireGoogleLogin is bool &&
+        data.defaultLanguage in ['vi', 'en', 'ko', 'zh'] &&
+        data.minSampleThreshold is number && data.minSampleThreshold >= 1 && data.minSampleThreshold <= 1000 &&
+        isStr(data.updatedBy, 1, 128) &&
+        isStr(data.updatedAt, 10, 40);
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['id', 'actorUid', 'actorEmail', 'action', 'targetType', 'targetId', 'details', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'actorUid', 'actorEmail', 'action', 'targetType', 'targetId', 'details', 'createdAt']) &&
+        isValidId(data.id) &&
+        isValidId(data.actorUid) &&
+        isStr(data.actorEmail, 3, 256) &&
+        isStr(data.action, 1, 80) &&
+        isStr(data.targetType, 1, 64) &&
+        isStr(data.targetId, 1, 64) &&
+        isStr(data.details, 1, 500) &&
+        isStr(data.createdAt, 10, 40);
+    }
+
+    // --- Collection Rules ---
+
+    // Users (PII Protected)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId) &&
+        isOwner(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == userId &&
+        (incoming().role == 'respondent' || isBootstrappedAdmin());
+      allow update: if isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        (
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly([
+            'displayName', 'employeeId', 'departmentId', 'section', 'jobTitle', 'role', 'preferredLang', 'updatedAt'
+          ])) ||
+          (isOwner(userId) &&
+           incoming().role == existing().role &&
+           incoming().diff(existing()).affectedKeys().hasOnly([
+            'displayName', 'employeeId', 'departmentId', 'section', 'jobTitle', 'preferredLang', 'updatedAt'
+          ]))
+        );
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // Admin Registry
+    match /admins/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId) && isAdmin() && isValidAdminRecord(incoming()) && incoming().uid == userId;
+      allow update: if isValidId(userId) && isAdmin() && isValidAdminRecord(incoming()) && incoming().uid == existing().uid;
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // Factory Departments (Non-PII Reference Catalog)
+    match /departments/{deptId} {
+      allow get: if isValidId(deptId) && isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isValidId(deptId) && isAdmin() && isValidDepartment(incoming()) && incoming().id == deptId;
+      allow update: if isValidId(deptId) && isAdmin() && isValidDepartment(incoming()) && incoming().id == existing().id;
+      allow delete: if isValidId(deptId) && isAdmin();
+    }
+
+    // MES Form Catalog (Non-PII Reference Catalog)
+    match /catalogForms/{formId} {
+      allow get: if isValidId(formId) && isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isValidId(formId) && isSignedIn() && isValidCatalogForm(incoming()) && incoming().id == formId && (isAdmin() || incoming().isCustom == true);
+      allow update: if isValidId(formId) && isAdmin() && isValidCatalogForm(incoming()) && incoming().id == existing().id;
+      allow delete: if isValidId(formId) && isAdmin();
+    }
+
+    // MES Report Catalog (Non-PII Reference Catalog)
+    match /catalogReports/{reportId} {
+      allow get: if isValidId(reportId) && isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isValidId(reportId) && isSignedIn() && isValidCatalogReport(incoming()) && incoming().id == reportId && (isAdmin() || incoming().isCustom == true);
+      allow update: if isValidId(reportId) && isAdmin() && isValidCatalogReport(incoming()) && incoming().id == existing().id;
+      allow delete: if isValidId(reportId) && isAdmin();
+    }
+
+    // Survey Campaigns
+    match /campaigns/{campaignId} {
+      allow get: if isValidId(campaignId) && isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isValidId(campaignId) && isAdmin() && isValidCampaign(incoming()) && incoming().id == campaignId;
+      allow update: if isValidId(campaignId) && isAdmin() && isValidCampaign(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt;
+      allow delete: if isValidId(campaignId) && isAdmin();
+
+      match /questions/{questionId} {
+        allow get: if isValidId(campaignId) && isValidId(questionId) && isSignedIn();
+        allow list: if isValidId(campaignId) && isSignedIn();
+        allow create: if isValidId(campaignId) && isValidId(questionId) && isAdmin() && isValidSurveyQuestion(incoming()) && incoming().id == questionId && exists(/databases/$(database)/documents/campaigns/$(campaignId));
+        allow update: if isValidId(campaignId) && isValidId(questionId) && isAdmin() && isValidSurveyQuestion(incoming()) && incoming().id == existing().id;
+        allow delete: if isValidId(campaignId) && isValidId(questionId) && isAdmin();
+      }
+    }
+
+    // Survey Responses (PII Protected + Terminal State Locked)
+    match /responses/{responseId} {
+      allow get: if isValidId(responseId) && isSignedIn() && (
+        isAdmin() || isAnalyst() || existing().respondentUid == request.auth.uid
+      );
+      allow list: if isSignedIn() && (
+        isAdmin() || isAnalyst() || resource.data.respondentUid == request.auth.uid
+      );
+      allow create: if isValidId(responseId) &&
+        isSignedIn() &&
+        isValidSurveyResponse(incoming()) &&
+        incoming().id == responseId &&
+        (incoming().respondentUid == request.auth.uid || isAdmin()) &&
+        exists(/databases/$(database)/documents/campaigns/$(incoming().campaignId));
+      allow update: if isValidId(responseId) &&
+        isSignedIn() &&
+        isValidSurveyResponse(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().respondentUid == existing().respondentUid &&
+        incoming().campaignId == existing().campaignId &&
+        (
+          isAdmin() ||
+          (existing().respondentUid == request.auth.uid &&
+           existing().status == 'draft' &&
+           incoming().diff(existing()).affectedKeys().hasOnly([
+             'isAnonymous', 'status', 'departmentId', 'section', 'participantInfo',
+             'selectedForms', 'selectedReports', 'workflowEvaluations', 'dxNeeds',
+             'uxRatings', 'proposals', 'submittedAt', 'updatedAt'
+           ]))
+        );
+      allow delete: if isValidId(responseId) && isAdmin();
+    }
+
+    // System Config
+    match /systemConfig/{configId} {
+      allow get: if isValidId(configId) && isSignedIn();
+      allow list: if isSignedIn();
+      allow create, update: if isValidId(configId) && isAdmin() && isValidSystemConfig(incoming()) && incoming().id == configId;
+      allow delete: if isValidId(configId) && isAdmin();
+    }
+
+    // Audit Logs (Append-only)
+    match /auditLogs/{logId} {
+      allow get: if isValidId(logId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(logId) &&
+        isSignedIn() &&
+        isValidAuditLog(incoming()) &&
+        incoming().id == logId &&
+        incoming().actorUid == request.auth.uid &&
+        (isAdmin() || isAnalyst());
+      allow update, delete: if false;
+    }
+  }
+}
